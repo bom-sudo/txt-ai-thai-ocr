@@ -1,9 +1,9 @@
 version: "3.8"
 
 services:
-  pwa-thai-ocr:
+  txt-ai-thai-ocr:
     build: .
-    container_name: pwa-thai-ocr
+    container_name: txt-ai-thai-ocr
     ports:
       - "10000:10000"
     environment:

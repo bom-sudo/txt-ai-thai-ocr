@@ -1,5 +1,5 @@
 ---
-title: Pwa Thai Ocr
+title: TXT AI Thai OCR
 emoji: 🚀
 colorFrom: blue
 colorTo: indigo
@@ -8,9 +8,9 @@ app_port: 7860
 pinned: false
 ---
 
-# PWACareVision - OpenThai 2.0 OCR API
+# txt-ai-thai-ocr - OpenThai 2.0 OCR API
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/bom-sudo/txt-ai-thai-ocr)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com)
 [![OpenThai 2.0](https://img.shields.io/badge/Model-iapp%2FOpenThai2.0--OCR--Text-orange.svg)](https://huggingface.co/iapp/OpenThai2.0-OCR-Text)
@@ -33,81 +33,61 @@ pinned: false
 
 ## 🛠️ การนำขึ้น Render (Deployment Guide)
 
-สามารถนำขึ้น Render ได้ 2 รูปแบบตามความต้องการใช้งาน:
+### วิธีที่ 1: Deploy ผ่าน Render Dashboard (Private Service)
+เข้าไปที่ลิงก์ของโปรเจกต์คุณ:
+👉 **[Render Project New Private Service](https://dashboard.render.com/project/prj-dbt8mhei0phs73f127e0/pserv/new)**
 
-### แบบที่ 1: Private Service (`pserv`) — แนะนำสำหรับ Internal Backend
-> เหมาะสำหรับใช้เป็น Microservice ภายในระบบ Render เพื่อให้ Backend ตัวอื่น (เช่น Node.js, Python, Golang) เรียกใช้เท่านั้น โดยไม่เปิดให้คนนอกเข้าถึงทางอินเทอร์เน็ตโดยตรง
-
-1. Push โค้ดนี้ขึ้น **GitHub Repository** ของคุณ (Public หรือ Private ก็ได้)
-2. ไปที่หน้าสร้าง Private Service: [Render Project New Private Service](https://dashboard.render.com/project/prj-dbt8mhei0phs73f127e0/pserv/new)
-3. เลือกหรือวาง URL ของ GitHub Repository ของคุณ
-4. ตั้งค่าดังนี้:
-   - **Name:** `pwa-thai-ocr` (หรือชื่อที่คุณต้องการ)
+1. ใส่ Git Repository URL:
+   ```text
+   https://github.com/bom-sudo/txt-ai-thai-ocr
+   ```
+2. ตั้งค่าบริการ:
+   - **Name:** `txt-ai-thai-ocr` (หรือชื่อที่คุณต้องการ)
    - **Region:** `Singapore` (แนะนำสำหรับประเทศไทย)
    - **Branch:** `main`
-   - **Runtime:** `Docker` (Render จะตรวจพบ `Dockerfile` อัตโนมัติ)
-   - **Plan:** `Starter` ($7/mo - Private Service บน Render เริ่มต้นที่ Starter)
+   - **Runtime:** `Docker` (Render ตรวจพบ `Dockerfile` อัตโนมัติ)
+   - **Plan:** `Starter` ($7/mo)
    - **Health Check Path:** `/health`
-5. กด **Create Private Service**
-6. **วิธีเรียกใช้งานจาก Service อื่นใน Render:**
-   - Private Network Hostname: `http://pwa-thai-ocr:10000`
-   - Endpoint: `http://pwa-thai-ocr:10000/ocr`
+3. กด **Create Private Service**
+4. **Internal Network URL สำหรับ Service อื่นใน Render:**
+   - Base URL: `http://txt-ai-thai-ocr:10000`
+   - OCR Endpoint: `http://txt-ai-thai-ocr:10000/ocr`
 
 ---
 
-### แบบที่ 2: Web Service (`web`) — รองรับ Free Plan / เข้าถึงจากอินเทอร์เน็ตได้
-> เหมาะสำหรับต้องการ Public URL เพื่อให้ Frontend (PWA, Mobile App, Web) ยิงมาที่ API ได้โดยตรง
-
-1. ใน Render Dashboard คลิก **New +** > **Web Service**
-2. เลือก GitHub Repository ของคุณ
-3. ตั้งค่า:
-   - **Runtime:** `Docker`
-   - **Plan:** `Free` หรือ `Starter`
-   - **Health Check Path:** `/health`
-4. เมื่อสร้างเสร็จ คุณจะได้ URL สาธารณะ เช่น: `https://pwa-thai-ocr.onrender.com`
+### วิธีที่ 2: Deploy เป็น Web Service (Public API & รองรับ Free Tier)
+หากต้องการ Public URL ให้ Frontend ยิงมาได้ตรงๆ หรือต้องการใช้ Free Plan ของ Render:
+1. กดที่ปุ่ม: [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/bom-sudo/txt-ai-thai-ocr)
+2. หรือใน Render Dashboard เลือก **New +** > **Web Service** > วาง `https://github.com/bom-sudo/txt-ai-thai-ocr`
+3. เลือก Plan เป็น **Free** หรือ **Starter**
+4. จะได้รับ Public URL เช่น `https://txt-ai-thai-ocr.onrender.com`
 
 ---
 
 ## 💻 การรัน Local / Docker
 
-### วิธีที่ 1: รันด้วย Docker Compose (แนะนำ)
+### รันด้วย Docker Compose
 ```bash
-# สั่ง build และ start container
 docker compose up -d --build
-
-# ดู log
-docker compose logs -f
 ```
 บริการจะเปิดที่ `http://localhost:10000`
 
-### วิธีที่ 2: รันด้วย Docker CLI ทั่วไป
+### รันตรงด้วย Python
 ```bash
-docker build -t pwa-thai-ocr .
-docker run -p 10000:10000 -e PORT=10000 pwa-thai-ocr
-```
-
-### วิธีที่ 3: รันตรงด้วย Python (ไม่ต้องใช้ Docker)
-```bash
-# 1. ติดตั้ง dependencies
 pip install -r requirements.txt
-
-# 2. รันแอป (ระบบจะดาวน์โหลดโมเดล OpenThai 2.0 อัตโนมัติในครั้งแรก)
 python app.py
-# หรือ
-uvicorn app:app --host 0.0.0.0 --port 10000
 ```
 
 ---
 
 ## 📡 API Reference & ตัวอย่างการใช้งาน
 
-Interactive Swagger UI ดูได้ที่: `http://localhost:10000/docs` หรือ `<URL>/docs`
+Interactive Swagger UI ดูได้ที่: `http://localhost:10000/docs` หรือ `<YOUR_RENDER_URL>/docs`
 
 ### 1. ตรวจสอบสถานะระบบ (`GET /health`)
 ```bash
 curl http://localhost:10000/health
 ```
-**Response:**
 ```json
 {
   "status": "ok",
@@ -116,11 +96,7 @@ curl http://localhost:10000/health
 }
 ```
 
----
-
 ### 2. OCR ด้วยการอัปโหลดไฟล์ภาพ (`POST /ocr`)
-ส่งไฟล์ภาพแบบ `multipart/form-data` (รองรับ `.jpg`, `.jpeg`, `.png`, `.pdf`)
-
 ```bash
 curl -X POST "http://localhost:10000/ocr" \
   -H "accept: application/json" \
@@ -128,11 +104,7 @@ curl -X POST "http://localhost:10000/ocr" \
   -F "file=@receipt.jpg"
 ```
 
----
-
 ### 3. OCR ด้วย Base64 (`POST /ocr/base64`)
-ส่งภาพที่แปลงเป็น Base64 หรือ Data URL ใน JSON
-
 ```bash
 curl -X POST "http://localhost:10000/ocr/base64" \
   -H "Content-Type: application/json" \
@@ -142,9 +114,7 @@ curl -X POST "http://localhost:10000/ocr/base64" \
   }'
 ```
 
----
-
-### 4. รูปแบบ Response ตัวอย่าง
+### 4. ตัวอย่าง Response
 ```json
 {
   "success": true,
@@ -175,24 +145,22 @@ curl -X POST "http://localhost:10000/ocr/base64" \
 
 ## 🧪 สคริปต์ทดสอบ (Test Client)
 
-ใน repo มีไฟล์ `test_client.py` สำหรับทดสอบส่งภาพไปที่ API:
-
 ```bash
 # ทดสอบกับ Localhost
 python test_client.py http://localhost:10000 receipt.jpg
 
 # ทดสอบกับ Render Web Service
-python test_client.py https://pwa-thai-ocr.onrender.com receipt.jpg
+python test_client.py https://txt-ai-thai-ocr.onrender.com receipt.jpg
 ```
 
 ---
 
-## ⚙️ Environment Variables ที่ปรับแต่งได้
+## ⚙️ Environment Variables
 
 | ตัวแปร | ค่าเริ่มต้น | รายละเอียด |
 |---|---|---|
 | `PORT` | `10000` | พอร์ตที่ Uvicorn จะเปิดรับ (Render กำหนดให้อัตโนมัติ) |
-| `OCR_THREADS` | `2` | จำนวน Thread ของ CPU สำหรับประมวลผล OCR (ปรับได้ตามขนาดของ Instance) |
+| `OCR_THREADS` | `2` | จำนวน Thread ของ CPU สำหรับประมวลผล OCR |
 | `MODEL_DIR` | `/app/OpenThai2.0-OCR-Text` | โฟลเดอร์เก็บ Model weights |
 
 ---
