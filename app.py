@@ -3,10 +3,12 @@ import os
 import io
 import base64
 import shutil
+import secrets
 import tempfile
 from pathlib import Path
 from typing import Optional, List
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Security, Depends
+from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from PIL import Image
@@ -38,10 +40,28 @@ try:
 except Exception as e:
     print(f"Warning: LineOCR Engine not initialized: {e}")
 
+# Security & API Key Authentication
+api_key_header = APIKeyHeader(name="x-api-key", auto_error=False, description="API Key via x-api-key header")
+bearer_scheme = HTTPBearer(auto_error=False, description="API Key via Authorization: Bearer <key>")
+
+def verify_api_key(
+    header_key: Optional[str] = Security(api_key_header),
+    bearer: Optional[HTTPAuthorizationCredentials] = Security(bearer_scheme)
+):
+    expected_key = os.environ.get("API_KEY", "sk-thai-ocr-2026").strip()
+    provided_key = header_key or (bearer.credentials if bearer else None)
+
+    if not provided_key or not secrets.compare_digest(provided_key, expected_key):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Invalid or missing API Key. Provide via 'x-api-key' header or 'Authorization: Bearer <key>'."
+        )
+    return provided_key
+
 app = FastAPI(
     title="PWACareVision OpenThai 2.0 OCR API",
-    description="Thai & English OCR service for receipts and documents powered by iapp/OpenThai2.0-OCR-Text",
-    version="2.0.0"
+    description="Secure Thai & English OCR service powered by iapp/OpenThai2.0-OCR-Text. Protected by API Key authentication.",
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -91,11 +111,16 @@ def root():
         "service": "PWACareVision OpenThai 2.0 OCR API",
         "model": "iapp/OpenThai2.0-OCR-Text",
         "ready": ocr_engine is not None,
+        "auth_required": True,
+        "auth_methods": [
+            "Header: x-api-key: <YOUR_API_KEY>",
+            "Header: Authorization: Bearer <YOUR_API_KEY>"
+        ],
         "endpoints": {
-            "health": "GET /health",
-            "docs": "GET /docs",
-            "upload": "POST /ocr (multipart/form-data)",
-            "base64": "POST /ocr/base64 (application/json)"
+            "health": "GET /health (public)",
+            "docs": "GET /docs (Swagger UI with Authorize button)",
+            "upload": "POST /ocr (multipart/form-data, requires API key)",
+            "base64": "POST /ocr/base64 (application/json, requires API key)"
         }
     }
 
@@ -107,7 +132,7 @@ def health():
         "engine": "OpenThai 2.0"
     }
 
-@app.post("/ocr")
+@app.post("/ocr", dependencies=[Depends(verify_api_key)])
 async def ocr_upload(file: UploadFile = File(...)):
     suffix = Path(file.filename or "receipt.jpg").suffix or ".jpg"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -126,7 +151,7 @@ async def ocr_upload(file: UploadFile = File(...)):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-@app.post("/ocr/base64")
+@app.post("/ocr/base64", dependencies=[Depends(verify_api_key)])
 async def ocr_base64(req: Base64OCRRequest):
     img_str = req.image
     if "," in img_str:

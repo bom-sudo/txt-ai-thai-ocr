@@ -17,6 +17,8 @@ services:
         value: 10000
       - key: OCR_THREADS
         value: 2
+      - key: API_KEY
+        value: sk-thai-ocr-2026
 
   # Option 2: Web Service (web) - If you need a public URL (e.g. https://txt-ai-thai-ocr.onrender.com)
   # Uncomment the block below and comment out the pserv block if you prefer a public service.
@@ -32,3 +34,5 @@ services:
   #       value: 10000
   #     - key: OCR_THREADS
   #       value: 2
+  #     - key: API_KEY
+  #       value: sk-thai-ocr-2026

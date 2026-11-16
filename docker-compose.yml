@@ -9,6 +9,7 @@ services:
     environment:
       - PORT=10000
       - OCR_THREADS=2
+      - API_KEY=sk-thai-ocr-2026
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
