@@ -80,11 +80,25 @@ def run_ocr_on_file(file_path: str):
     if not ocr_engine:
         raise HTTPException(status_code=500, detail="OCR engine is not loaded on this server.")
     
-    results = ocr_engine(file_path)
-    lines = []
-    full_text_list = []
+    if hasattr(ocr_engine, "read"):
+        res = ocr_engine.read(file_path)
+    elif callable(ocr_engine):
+        res = ocr_engine(file_path)
+    else:
+        raise HTTPException(status_code=500, detail="LineOCR has no read method.")
 
-    for item in results:
+    if isinstance(res, dict):
+        full_text = res.get("text", "")
+        raw_lines = res.get("lines", [])
+    elif isinstance(res, list):
+        full_text = "\n".join([str(item.get("text", "")).strip() for item in res if item.get("text")])
+        raw_lines = res
+    else:
+        full_text = str(res)
+        raw_lines = []
+
+    lines = []
+    for item in raw_lines:
         text = str(item.get("text", "")).strip()
         conf = float(item.get("confidence", 1.0))
         box = item.get("box") or item.get("bbox") or []
@@ -94,9 +108,7 @@ def run_ocr_on_file(file_path: str):
                 "confidence": round(conf, 4),
                 "box": box
             })
-            full_text_list.append(text)
 
-    full_text = "\n".join(full_text_list)
     return {
         "success": True,
         "line_count": len(lines),
