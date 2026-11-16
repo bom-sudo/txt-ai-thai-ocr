@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  pwa-thai-ocr:
+    build: .
+    container_name: pwa-thai-ocr
+    ports:
+      - "10000:10000"
+    environment:
+      - PORT=10000
+      - OCR_THREADS=2
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

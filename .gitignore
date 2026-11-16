@@ -5,3 +5,10 @@ __pycache__/
 .DS_Store
 .venv/
 env/
+venv/
+OpenThai2.0-OCR-Text/
+.env
+*.jpg
+*.jpeg
+*.png
+!receipt.jpg

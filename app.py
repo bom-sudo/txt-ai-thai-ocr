@@ -12,9 +12,19 @@ from pydantic import BaseModel
 from PIL import Image
 
 # Path to OpenThai2.0 model weights and code
-MODEL_DIR = Path("/app/OpenThai2.0-OCR-Text")
+MODEL_DIR = Path(os.environ.get("MODEL_DIR", "/app/OpenThai2.0-OCR-Text"))
 if not MODEL_DIR.exists():
     MODEL_DIR = Path("OpenThai2.0-OCR-Text")
+
+# Auto-download model weights if not present (useful for local Python dev or non-Docker env)
+if not MODEL_DIR.exists() or not (MODEL_DIR / "det.onnx").exists():
+    try:
+        from huggingface_hub import snapshot_download
+        print(f"Model not found at {MODEL_DIR}. Downloading iapp/OpenThai2.0-OCR-Text from Hugging Face...")
+        snapshot_download(repo_id="iapp/OpenThai2.0-OCR-Text", local_dir=str(MODEL_DIR))
+        print("Model downloaded successfully.")
+    except Exception as e:
+        print(f"Warning: Failed to auto-download model: {e}")
 
 sys.path.insert(0, str(MODEL_DIR))
 
@@ -22,14 +32,15 @@ sys.path.insert(0, str(MODEL_DIR))
 ocr_engine = None
 try:
     from runtime.line_engine import LineOCR
-    ocr_engine = LineOCR(str(MODEL_DIR), threads=4)
-    print("OpenThai 2.0 LineOCR Engine initialized successfully.")
+    threads = int(os.environ.get("OCR_THREADS", "2"))
+    ocr_engine = LineOCR(str(MODEL_DIR), threads=threads)
+    print(f"OpenThai 2.0 LineOCR Engine initialized successfully (threads={threads}).")
 except Exception as e:
     print(f"Warning: LineOCR Engine not initialized: {e}")
 
 app = FastAPI(
     title="PWACareVision OpenThai 2.0 OCR API",
-    description="Thai OCR service for medical receipts powered by iapp/OpenThai2.0-OCR-Text",
+    description="Thai & English OCR service for receipts and documents powered by iapp/OpenThai2.0-OCR-Text",
     version="2.0.0"
 )
 
@@ -77,13 +88,23 @@ def run_ocr_on_file(file_path: str):
 def root():
     return {
         "status": "online",
-        "service": "PWACareVision OpenThai 2.0 OCR",
+        "service": "PWACareVision OpenThai 2.0 OCR API",
         "model": "iapp/OpenThai2.0-OCR-Text",
         "ready": ocr_engine is not None,
         "endpoints": {
+            "health": "GET /health",
+            "docs": "GET /docs",
             "upload": "POST /ocr (multipart/form-data)",
             "base64": "POST /ocr/base64 (application/json)"
         }
+    }
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok" if ocr_engine is not None else "degraded",
+        "ready": ocr_engine is not None,
+        "engine": "OpenThai 2.0"
     }
 
 @app.post("/ocr")
@@ -97,6 +118,8 @@ async def ocr_upload(file: UploadFile = File(...)):
         data = run_ocr_on_file(tmp_path)
         data["filename"] = file.filename
         return data
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR Processing Error: {str(e)}")
     finally:
@@ -122,8 +145,15 @@ async def ocr_base64(req: Base64OCRRequest):
         data = run_ocr_on_file(tmp_path)
         data["filename"] = req.filename
         return data
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR Processing Error: {str(e)}")
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", "10000"))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)

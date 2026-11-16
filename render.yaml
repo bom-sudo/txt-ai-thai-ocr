@@ -1,0 +1,34 @@
+# Render Blueprint Configuration (render.yaml)
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # Option 1: Private Service (pserv) - Internal microservice inside your Render project
+  # Reachable only by other services within the same Render project at:
+  #   http://pwa-thai-ocr:10000/ocr
+  #   http://pwa-thai-ocr:10000/health
+  - type: pserv
+    name: pwa-thai-ocr
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: OCR_THREADS
+        value: 2
+
+  # Option 2: Web Service (web) - If you need a public URL (e.g. https://pwa-thai-ocr.onrender.com)
+  # Uncomment the block below and comment out the pserv block if you prefer a public service.
+  # - type: web
+  #   name: pwa-thai-ocr
+  #   runtime: docker
+  #   plan: free
+  #   region: singapore
+  #   dockerfilePath: ./Dockerfile
+  #   healthCheckPath: /health
+  #   envVars:
+  #     - key: PORT
+  #       value: 10000
+  #     - key: OCR_THREADS
+  #       value: 2
