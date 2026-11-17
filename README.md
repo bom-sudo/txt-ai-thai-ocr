@@ -53,6 +53,7 @@ pinned: false
 - **แม่นยำสูง:** รองรับทั้งภาษาไทยและอังกฤษ พร้อมระบบ Auto-deskew (หมุน/จัดองศาภาพอัตโนมัติ)
 - **รองรับ Render 100%:** รองรับ `$PORT` อัตโนมัติ, มี `/health` endpoint สาธารณะสำหรับ Render Health Check
 - **Dual Endpoint:** รองรับทั้งแบบอัปโหลดไฟล์ตรง (`POST /ocr`) และส่งภาพ Base64 (`POST /ocr/base64`)
+- **ตัดคำภาษาไทย:** รวม [iapp/OpenThai2.0-LATTE-WordSeg-Lite](https://huggingface.co/iapp/OpenThai2.0-LATTE-WordSeg-Lite) (โมเดล ~3 MB ทำงาน offline บน CPU) ตัดคำได้ 3 ระดับ `long` / `short` / `minimal` ทั้งแบบเรียกตรง (`POST /segment`) และต่อท้ายผล OCR (`?segment=short`)
 
 ---
 
@@ -130,7 +131,36 @@ curl -X POST "https://txt-ai-thai-ocr.onrender.com/ocr/base64" \
 
 ---
 
-### 4. ตัวอย่างการเรียกใช้งานใน JavaScript (Fetch API)
+### 4. ตัดคำภาษาไทย (`POST /segment`) — *ต้องใส่ Key*
+
+| unit | ความหมาย | ตัวอย่าง `เจ้าหน้าที่การศึกษาเปิดเผยว่า` |
+|---|---|---|
+| `long` | คงคำประสมไว้ | เจ้าหน้าที่ \| การศึกษา \| เปิดเผย \| ว่า |
+| `short` (ค่าเริ่มต้น) | ระดับคำ | เจ้า \| หน้าที่ \| การ \| ศึกษา \| เปิด \| เผย \| ว่า |
+| `minimal` | ระดับหน่วยคำ (morpheme) | เจ้า \| หน้า \| ที่ \| การ \| ศึกษา \| เปิด \| เผย \| ว่า |
+
+```bash
+curl -X POST "https://txt-ai-thai-ocr.onrender.com/segment" \
+  -H "x-api-key: sk-thai-ocr-2026" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "เจ้าหน้าที่การศึกษาเปิดเผยว่า", "unit": "long"}'
+```
+```json
+{"success": true, "unit": "long", "word_count": 4,
+ "words": ["เจ้าหน้าที่", "การศึกษา", "เปิดเผย", "ว่า"]}
+```
+
+### 5. OCR + ตัดคำในคำสั่งเดียว
+เติม `segment=long|short|minimal` ให้ `/ocr` (query string) หรือ `/ocr/base64` (ฟิลด์ใน JSON) ผลลัพธ์จะมี `segment_unit`, `words` (ทั้งหน้า) และ `words` ในแต่ละบรรทัดของ `lines` เพิ่มเข้ามา หากไม่ส่งจะได้ผลเหมือนเดิม
+```bash
+curl -X POST "https://txt-ai-thai-ocr.onrender.com/ocr?segment=short" \
+  -H "x-api-key: sk-thai-ocr-2026" \
+  -F "file=@receipt.jpg"
+```
+
+---
+
+### 6. ตัวอย่างการเรียกใช้งานใน JavaScript (Fetch API)
 ```javascript
 const formData = new FormData();
 formData.append("file", fileInput.files[0]);
@@ -153,6 +183,55 @@ if (response.status === 401) {
 
 ---
 
+## 🔌 การนำ API ไปใช้ในโปรเจกต์อื่น
+
+ทุกโปรเจกต์เรียกผ่าน HTTP + API Key เหมือนกัน เก็บ URL และ Key ไว้ใน environment variable ของโปรเจกต์นั้น (ห้าม commit):
+```env
+OCR_API_URL=https://txt-ai-thai-ocr.onrender.com
+OCR_API_KEY=รหัสลับของคุณ
+```
+
+**Python (FastAPI / Django / สคริปต์)**
+```python
+import os, requests
+
+BASE, KEY = os.environ["OCR_API_URL"], os.environ["OCR_API_KEY"]
+H = {"x-api-key": KEY}
+
+def ocr_image(path: str, segment: str | None = "short") -> dict:
+    with open(path, "rb") as f:
+        r = requests.post(f"{BASE}/ocr", headers=H, files={"file": f},
+                          params={"segment": segment} if segment else None, timeout=60)
+    r.raise_for_status()
+    return r.json()          # {"text", "lines", "words", ...}
+
+def segment_text(text: str, unit: str = "short") -> list[str]:
+    r = requests.post(f"{BASE}/segment", headers=H, json={"text": text, "unit": unit}, timeout=30)
+    r.raise_for_status()
+    return r.json()["words"]
+```
+
+**React / Vite (ฝั่ง frontend)** — แนะนำให้เรียกผ่าน backend ของโปรเจกต์ ไม่ใส่ API Key ไว้ในโค้ดฝั่งเบราว์เซอร์ เพราะใครก็เปิดดูได้ ถ้าจำเป็นต้องเรียกตรงให้ตั้ง `API_KEY` เป็นคีย์เฉพาะแล้วเปลี่ยนเมื่อหลุด
+
+**Node.js / n8n / Zapier / Make** — ใช้ HTTP Request node: `POST {URL}/ocr` พร้อม Header `x-api-key` และส่งไฟล์เป็น `multipart/form-data` ฟิลด์ `file`
+
+### ตัวอย่างการใช้งานจริง
+| งาน | วิธีใช้ |
+|---|---|
+| ดึงข้อความจากใบเสร็จ/สลิป/บัตร | `POST /ocr` แล้วใช้ `text` หรือ `lines[].box` เพื่อหาตำแหน่ง |
+| ค้นหา/ทำ index ข้อความไทย (Elasticsearch, SQLite FTS) | `POST /ocr?segment=short` แล้วนำ `words` ไปเก็บเป็น token |
+| Word cloud, นับความถี่คำ | ใช้ `words` จาก `segment=short` |
+| ตัดคำข้อความที่ไม่ได้มาจาก OCR (แชท, รีวิว) | `POST /segment` |
+| ตัดบรรทัดข้อความไม่ให้หักกลางคำ | ใช้ `unit=long` แล้วขึ้นบรรทัดใหม่ตามขอบคำ |
+| ส่งภาพจากมือถือ/PWA | `POST /ocr/base64` ส่ง data URL ได้ตรง |
+
+**ข้อควรระวัง**
+- Render Free Tier จะหลับเมื่อไม่มีการใช้งาน คำขอแรกอาจช้า 30-60 วินาที ควรตั้ง timeout ≥ 60 วินาที และเรียก `GET /health` ปลุกก่อน
+- ถ้า API อยู่ใน Private Service ของ Render ต้องเรียกจาก service อื่นใน project เดียวกันผ่าน internal URL
+- เปลี่ยน `API_KEY` เริ่มต้น (`sk-thai-ocr-2026`) ก่อนใช้งานจริงทุกครั้ง เพราะค่านี้เปิดเผยอยู่ใน README
+
+---
+
 ## 🧪 สคริปต์ทดสอบ (Test Client)
 
 ```bash
@@ -166,7 +245,7 @@ python test_client.py https://txt-ai-thai-ocr.onrender.com receipt.jpg sk-thai-o
 
 | ตัวแปร | ค่าเริ่มต้น | รายละเอียด |
 |---|---|---|
-| `API_KEY` | `sk-thai-ocr-2026` | รหัส API Key สำหรับปลดล็อกใช้งาน endpoint `/ocr` |
+| `API_KEY` | `sk-thai-ocr-2026` | รหัส API Key สำหรับปลดล็อกใช้งาน endpoint `/ocr`, `/ocr/base64`, `/segment` |
 | `PORT` | `10000` | พอร์ตที่ Uvicorn จะเปิดรับ (Render กำหนดให้อัตโนมัติ) |
 | `OCR_THREADS` | `2` | จำนวน Thread ของ CPU สำหรับประมวลผล OCR |
 | `MODEL_DIR` | `/app/OpenThai2.0-OCR-Text` | โฟลเดอร์เก็บ Model weights |
@@ -175,4 +254,5 @@ python test_client.py https://txt-ai-thai-ocr.onrender.com receipt.jpg sk-thai-o
 
 ## 📄 License
 - Model: [iapp/OpenThai2.0-OCR-Text](https://huggingface.co/iapp/OpenThai2.0-OCR-Text) (Apache-2.0 License)
+- Word segmentation: [iapp/OpenThai2.0-LATTE-WordSeg-Lite](https://huggingface.co/iapp/OpenThai2.0-LATTE-WordSeg-Lite) (โมเดลและพจนานุกรม CC BY-SA 4.0 ใช้เชิงพาณิชย์ได้แต่ต้องให้เครดิต, โค้ด Apache-2.0)
 - Code: MIT License

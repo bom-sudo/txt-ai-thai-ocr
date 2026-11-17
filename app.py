@@ -40,6 +40,38 @@ try:
 except Exception as e:
     print(f"Warning: LineOCR Engine not initialized: {e}")
 
+# Initialize Thai word segmenter (OpenThai2.0-LATTE-WordSeg-Lite, ทำงาน offline บน CPU)
+segmenters = {}
+try:
+    from openthai_latte_wordseg_lite import Segmenter
+    for _unit in ("long", "short", "minimal"):
+        segmenters[_unit] = Segmenter(unit=_unit)
+    print("LATTE-WordSeg-Lite initialized successfully.")
+except Exception as e:
+    print(f"Warning: WordSeg not initialized: {e}")
+
+def segment_text(text: str, unit: str = "short") -> List[str]:
+    # ตัดคำไทยทีละบรรทัด เพื่อให้ผลลัพธ์ไม่ข้ามบรรทัดของ OCR
+    seg = segmenters.get(unit)
+    if not seg:
+        raise HTTPException(status_code=503, detail="Word segmentation is not available on this server.")
+    words: List[str] = []
+    for line in text.splitlines():
+        if line.strip():
+            words.extend(w for w in seg.tokenize(line) if w.strip())
+    return words
+
+def apply_segmentation(data: dict, unit: Optional[str]) -> dict:
+    if not unit:
+        return data
+    if unit not in ("long", "short", "minimal"):
+        raise HTTPException(status_code=400, detail="segment must be one of: long, short, minimal")
+    data["segment_unit"] = unit
+    data["words"] = segment_text(data["text"], unit)
+    for line in data["lines"]:
+        line["words"] = segment_text(line["text"], unit)
+    return data
+
 # Security & API Key Authentication
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=False, description="API Key via x-api-key header")
 bearer_scheme = HTTPBearer(auto_error=False, description="API Key via Authorization: Bearer <key>")
@@ -75,6 +107,11 @@ app.add_middleware(
 class Base64OCRRequest(BaseModel):
     image: str  # Data URL or pure base64 string
     filename: Optional[str] = "receipt.jpg"
+    segment: Optional[str] = None  # long | short | minimal -> เพิ่มผลตัดคำ
+
+class SegmentRequest(BaseModel):
+    text: str
+    unit: str = "short"  # long | short | minimal
 
 def run_ocr_on_file(file_path: str):
     if not ocr_engine:
@@ -123,6 +160,7 @@ def root():
         "service": "PWACareVision OpenThai 2.0 OCR API",
         "model": "iapp/OpenThai2.0-OCR-Text",
         "ready": ocr_engine is not None,
+        "wordseg_ready": bool(segmenters),
         "auth_required": True,
         "auth_methods": [
             "Header: x-api-key: <YOUR_API_KEY>",
@@ -132,7 +170,8 @@ def root():
             "health": "GET /health (public)",
             "docs": "GET /docs (Swagger UI with Authorize button)",
             "upload": "POST /ocr (multipart/form-data, requires API key)",
-            "base64": "POST /ocr/base64 (application/json, requires API key)"
+            "base64": "POST /ocr/base64 (application/json, requires API key)",
+            "segment": "POST /segment (Thai word segmentation, requires API key). OCR endpoints accept segment=long|short|minimal"
         }
     }
 
@@ -145,7 +184,7 @@ def health():
     }
 
 @app.post("/ocr", dependencies=[Depends(verify_api_key)])
-async def ocr_upload(file: UploadFile = File(...)):
+async def ocr_upload(file: UploadFile = File(...), segment: Optional[str] = None):
     suffix = Path(file.filename or "receipt.jpg").suffix or ".jpg"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
@@ -154,7 +193,7 @@ async def ocr_upload(file: UploadFile = File(...)):
     try:
         data = run_ocr_on_file(tmp_path)
         data["filename"] = file.filename
-        return data
+        return apply_segmentation(data, segment)
     except HTTPException:
         raise
     except Exception as e:
@@ -181,7 +220,7 @@ async def ocr_base64(req: Base64OCRRequest):
     try:
         data = run_ocr_on_file(tmp_path)
         data["filename"] = req.filename
-        return data
+        return apply_segmentation(data, req.segment)
     except HTTPException:
         raise
     except Exception as e:
@@ -189,6 +228,13 @@ async def ocr_base64(req: Base64OCRRequest):
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+@app.post("/segment", dependencies=[Depends(verify_api_key)])
+def segment(req: SegmentRequest):
+    if req.unit not in ("long", "short", "minimal"):
+        raise HTTPException(status_code=400, detail="unit must be one of: long, short, minimal")
+    words = segment_text(req.text, req.unit)
+    return {"success": True, "unit": req.unit, "word_count": len(words), "words": words}
 
 if __name__ == "__main__":
     import uvicorn

@@ -9,3 +9,5 @@ pillow>=10.2.0
 pypdfium2>=4.28.0
 huggingface_hub>=0.22.0
 pydantic>=2.0.0
+# Thai word segmentation (LATTE-WordSeg-Lite, model bundled in wheel, runs offline)
+https://huggingface.co/iapp/OpenThai2.0-LATTE-WordSeg-Lite/resolve/main/openthai2_0_latte_wordseg_lite-0.1.2-py3-none-any.whl
